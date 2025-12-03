@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -e
+
+if [ -z "$1" ]; then
+  echo "Usage: gh pr-mark-as-viewed <file|folder>"
+  exit 1
+fi
+
+PR_ID=$(gh pr view --json id -q '.id' 2>/dev/null)
+if [ -z "$PR_ID" ]; then
+  echo "No PR found for current branch"
+  exit 1
+fi
+
+FILES=$(gh pr view --json files -q '.files[].path')
+PATTERN="$1"
+MATCHED=0
+
+for FILE in $FILES; do
+  if [[ "$FILE" == "$PATTERN"* ]] || [[ "$FILE" == "$PATTERN" ]]; then
+    gh api graphql -f query='
+      mutation($prId: ID!, $path: String!) {
+        markFileAsViewed(input: {pullRequestId: $prId, path: $path}) {
+          pullRequest { id }
+        }
+      }
+    ' -f prId="$PR_ID" -f path="$FILE" > /dev/null
+    echo "✓ $FILE"
+    MATCHED=1
+  fi
+done
+
+if [ $MATCHED -eq 0 ]; then
+  echo "No files match: $PATTERN"
+  exit 1
+fi
